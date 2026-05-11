@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+*.egg
+build/
+dist/
+.Python
+*.so
+
+# Virtual envs
+venv/
+env/
+.venv/
+.env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Ares runtime — never commit
+ares_*.log
+session_*.txt
+.ares/
+
+# Secrets — NEVER commit
+.env
+.envrc
+*.token
+groq_api_key*
+
+# OS junk
+Thumbs.db
+desktop.ini
+
+# Test outputs / scratchpads
+scratch/
+tmp/
+out/
+*.bak

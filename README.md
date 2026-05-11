@@ -1,269 +1,268 @@
-# Ares — AI Defensive Security Agent
+# Ares — Read-only System Security Audit
 
-**v1.0** · Bare-metal Kali NetHunter · Commander: The Priest
+```
+ █████╗ ██████╗ ███████╗███████╗
+██╔══██╗██╔══██╗██╔════╝██╔════╝
+███████║██████╔╝█████╗  ███████╗   🛡️
+██╔══██║██╔══██╗██╔══╝  ╚════██║
+██║  ██║██║  ██║███████╗███████║
+╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝
+```
 
-Ares is the symmetric defensive counterpart to **Athena**. Same skeleton,
-opposite mission. You give it a host and an objective, it picks the
-right specialist agent, picks the right tool, and runs commands one at
-a time through a `y/n` confirmation gate. Read-only by default;
-containment actions (kill, block, quarantine, account lock) hit a
-double-confirm gate. Every finding is regex-extracted from real
-subprocess output (no AI hallucinations), tagged with MITRE ATT&CK from
-the detection side, and tracked in a Defense Task Tree (DTT) plus a
-networkx-backed threat graph.
+**Fast read-only system audit.** Run it on any Linux host — Ares
+inspects the system, reports what's wrong, grades the overall
+security posture, and tells you exactly how to fix each issue.
 
-Where Athena attacks, Ares watches, detects, investigates, and
-remediates. Run them side-by-side: Athena finds the path in, Ares
-verifies you've closed the same path against yourself.
+**Ares never modifies anything.** No installs. No service restarts.
+No firewall changes. No file edits. No sudo. It only looks.
 
----
+Single file. ~1100 lines. Runs in 30-60 seconds. Designed for
+bare-metal Kali NetHunter (sdm845 / OnePlus 6 / Phosh) but works on
+any Linux with Python 3.10+.
 
-## What Ares does
+Built by **The Priest** as the second pillar of a Greek-pantheon stack:
 
-Ares is a defender's copilot built for the same rig as Athena and
-sharing the same Groq API key. The architecture is identical — single
-file, deterministic dispatch, structured tool builders, MITRE auto-tag,
-smart context manager, scope enforcement, attack/threat graph. The
-contents are different: defensive KB, defensive tools, defensive
-workflows, defender persona.
-
-### Specialist agents (10 + strategist)
-
-- **♛ Strategist** — routes the DTT, picks which agent runs next.
-- **🚨 Triage** — first-30-minutes host health check; verdict: healthy / suspicious / compromised.
-- **📜 Log Analyst** — journalctl, /var/log, auditd, web access logs.
-- **🩻 Threat Hunter** — cron, systemd, ld.preload, web shells, kernel modules, PAM tampering, WMI subscriptions.
-- **🌐 Network Defender** — Suricata, Zeek, tshark, tcpdump, firewall.
-- **🛟 Incident Responder** — containment + eradication + recovery; evidence-first, double-confirm gates.
-- **🛡 Hardening Auditor** — Lynis, OpenSCAP, sysctl, PAM, SSH, file perms vs CIS/STIG.
-- **🧬 Malware Analyst** — static-only triage: file, strings, exiftool, capa, yara, clamav.
-- **🔬 Forensics Analyst** — volatility3, sleuthkit, foremost; chain-of-custody preserved.
-- **🪪 Identity Defender** — passwd/shadow, sudoers, SSH keys, Kerberos, SSSD, AD audit.
-- **📋 Reporter** — consolidates findings, maps to ATT&CK, drops unverified noise.
-
-### Workflows (23 pre-built engagement templates)
-
-Triage / Health Check · Live IR — Suspected Compromise · Hardening
-Audit · Linux Persistence Hunt · Process / Network Anomaly Hunt · Auth
-Failure Analysis · Malware Static Triage · PCAP Analysis · Memory
-Forensics · Disk Forensics · Log Review · TLS / SSL Audit · Account
-Audit · SUID / Capability Audit · Service Exposure Audit · Linux
-Post-Compromise IR · Container / Cloud Audit · File Integrity Check ·
-Suricata / Zeek Alert Review · IDS Rule Tuning · Firewall Audit ·
-Forensics Evidence Collection · Rootkit Hunt.
-
-### Structured tool registry (51 builders)
-
-`ps_tree` · `ss_listening` · `ss_established` · `lsof_net` ·
-`journalctl` · `auth_log_grep` · `auditd_search` · `aureport_summary` ·
-`find_recent_files` · `find_suid` · `find_caps` · `find_world_writable`
-· `cron_sweep` · `systemd_enabled` · `systemd_recent_units` ·
-`aide_check` · `debsums_check` · `file_hash` · `lynis_audit` ·
-`rkhunter_scan` · `chkrootkit_scan` · `openscap_scan` ·
-`tcpdump_capture` · `tshark_read` · `suricata_replay` · `zeek_offline`
-· `fail2ban_status` · `firewall_show` · `yara_scan` · `clamscan` ·
-`file_strings` · `file_inspect` · `capa_run` · `volatility_run` ·
-`sleuthkit_fls` · `mactime_render` · `foremost_carve` · `curl_basic` ·
-`virustotal_hash` · `abuseipdb_check` · `crt_sh_lookup` ·
-`shadow_audit` · `sudoers_audit` · `authorized_keys_sweep` · `sslscan`
-· `testssl` · `ssh_audit` · `chainsaw_hunt` · `hayabusa_timeline` ·
-`dig_lookup` · `whois_lookup`.
-
-### Carried over from Athena's architecture (unchanged where it matters)
-
-- Defense Task Tree (DTT) — same `PTT` class internally, but the goal,
-  finding types, phases, and natural-language serialisation are
-  defender-flavoured.
-- Threat graph (networkx) — host / service / IOC / vuln / account
-  nodes, with pivot suggestions surfaced to the LLM on demand.
-- 33 MITRE ATT&CK detection mappings — same TTP IDs as Athena's
-  attack-side mappings, but tagged when defensive tooling fires.
-- Smart context manager with `[NEED]ptt|history|graph|kb N[/NEED]`
-  re-fetch protocol — saves tokens on quiet turns, expands
-  automatically on yellow/red confidence or stuck loops.
-- IOC fanout queue — when a hash / suspicious IP / YARA hit / persistence
-  artifact lands, the threat hunter automatically gets a sweep node
-  added so the indicator gets propagated across all relevant sources.
-- Source-tagged finding extraction — every finding records the exact
-  shell command that produced it.  No AI hallucinations enter the
-  case file.
-- Groq provider chain — biggest → smallest, same as Athena.
-- Per-command timeouts — volatility/yara/clamscan get 1800s, journalctl
-  60s, ps/ss/lsof 30s.  No hung sessions.
-- Boot lock auto-expires after 6h.
-- Scope / RoE enforcement via `~/.ares/scope.json`.
-- y/n/q gate on every command. Double-confirm gate on containment-style
-  actions: kill -9, killall, pkill, fail2ban-client unban/stop, nft
-  flush, ufw disable/reset, iptables -F, usermod -L, passwd -l,
-  userdel, chattr +i, auditctl -D, suricatasc.
-- Loop breaker — same shell command twice → forced agent rotation +
-  RED conf override.  Three repeats → handle_stuck.
-- No on-disk persistence except `~/.ares/scope.json`, `~/.ares/logs/`,
-  and reports.
+| Tool | Role | Repo |
+|------|------|------|
+| Athena | offensive recon agent | [athena5](https://github.com/the-priest/athena5) |
+| **Ares** | **defensive system audit** | **(this repo)** |
+| Zeus | legal OSINT aggregator | [zeus5](https://github.com/the-priest/zeus5) |
 
 ---
 
-## Install
+## What it checks
 
-Tested on Kali Linux NetHunter (sdm845, Phosh).  Should work on any
-Debian / Ubuntu / Arch system with python ≥ 3.10.
+```
+boot → 18 parallel checks → score → graded report
+```
+
+| Check | What it looks at |
+|-------|------------------|
+| **FW** | ufw / iptables / nftables — is a firewall active? |
+| **NET** | `ss -tlnpu` — public vs localhost listeners |
+| **SSH** | `/etc/ssh/sshd_config` — root login, password auth, X11, etc. |
+| **AUTH-A** | `journalctl _COMM=sudo` — failed sudo in last 24h |
+| **AUTH-B** | `journalctl _COMM=sshd` — failed SSH logins in last 24h |
+| **AUTH-C** | `last -n 10 -F` — recent successful logins |
+| **PATCH-A** | `systemctl is-enabled unattended-upgrades` |
+| **PATCH-B** | `apt list --upgradable` — pending security updates |
+| **PRIV** | SUID files outside `/usr/bin /usr/sbin /bin /sbin` |
+| **PERM** | World-writable files in `$HOME` |
+| **MAC** | AppArmor (`aa-status`) or SELinux (`getenforce`) status |
+| **CRYPTO** | `lsblk -f` — is `/` on a LUKS volume? |
+| **CRON** | `crontab -l` + `/etc/cron.*` + `systemctl list-timers` |
+| **PROC** | Network services running as root |
+| **KERN** | Running kernel vs newest installed |
+| **HIST** | Shell history files (empty = possibly wiped) |
+| **RKHUNT** | `/var/log/rkhunter.log` warnings if rkhunter is installed |
+| **DNS** | `/etc/resolv.conf` — non-standard DNS servers |
+
+Every check runs **as your normal user**. No sudo, no privilege
+escalation. If a check needs root and you're not root, it's skipped
+silently.
+
+---
+
+## Severity model
+
+Each finding is rated:
+
+| Severity | Score | Examples |
+|----------|-------|----------|
+| `critical` | 20 | `PermitEmptyPasswords yes`, SSH protocol 1 |
+| `high` | 8 | No firewall, `PermitRootLogin yes`, 100+ failed SSH attempts |
+| `medium` | 3 | Password auth on SSH, no MAC, pending security updates |
+| `low` | 1 | World-writable files in home, X11Forwarding on |
+| `info` | 0 | Confirmation that something is set up correctly |
+
+The overall **grade** comes from the sum of all severity scores:
+
+| Total score | Grade |
+|-------------|-------|
+| 0 | A+ |
+| 1-3 | A |
+| 4-8 | B |
+| 9-16 | C |
+| 17-30 | D |
+| 31+ | F |
+
+---
+
+## What it deliberately doesn't do
+
+- **No system modification.** Ares only reads.
+- **No sudo.** If it can't access something as your user, the
+  check is skipped — never escalated.
+- **No `shell=True`.** All commands run via Python arg-lists, so
+  there's no command-injection surface even if a path or hostname
+  contains weird characters.
+- **No AI-driven commands.** The previous version (v1.0) had a
+  50-turn agent loop that let an LLM propose shell commands. That's
+  gone. The 18 checks are hardcoded.
+- **No incident response.** Ares tells you what's wrong; it doesn't
+  fight back. If you want to ban an IP, change a config, kill a
+  process — you do it yourself with the fix hint provided.
+- **No disk persistence.** Findings live in RAM. No report files,
+  no logs, no `~/.ares` directory. Copy what you need before
+  exiting.
+
+---
+
+## Installation
 
 ```bash
 git clone https://github.com/the-priest/ares5.git
 cd ares5
-chmod +x install.sh
 ./install.sh
 ```
 
-The installer:
+The installer is minimal — it only:
+- Checks Python 3.10+ is available
+- Installs `groq>=0.4.0` (optional, for the AI summary)
+- Makes `ares.py` executable
+- Symlinks `~/.local/bin/ares` → `ares.py`
 
-1. Detects your login shell, picks the right rc file.
-2. Verifies Python 3.10+.
-3. Installs `groq` and `networkx` (with `--break-system-packages` on
-   PEP 668 systems).
-4. Creates `~/.ares/logs/`.
-5. Symlinks `/usr/local/bin/ares` → `ares.py` (or falls back to a
-   shell alias if you don't have sudo).
-6. Picks up `GROQ_API_KEY` from your environment if Athena already
-   set it; otherwise prompts for it.
+It does NOT install any system packages, change any system
+configuration, or require sudo.
 
-If the installer can't run for any reason, the manual route is:
+### Manual install
 
 ```bash
-pip install groq networkx --break-system-packages
-export GROQ_API_KEY='your_key_here'
-python3 ares.py
-```
+pip install groq --break-system-packages
+chmod +x ares.py
+mkdir -p ~/.local/bin
+ln -sf "$PWD/ares.py" ~/.local/bin/ares
 
-If you already run Athena, you don't need a new key — Ares uses the
-same `GROQ_API_KEY`. The installer detects an existing `~/.athena`
-directory and tells you the two are designed to run side-by-side.
+# Optional: AI summary paragraph
+export GROQ_API_KEY=gsk_...
+echo 'export GROQ_API_KEY=gsk_...' >> ~/.bashrc
+```
 
 ---
 
 ## Usage
 
-```
-$ ares
-```
-
-You'll see the v1.0 banner, the boot sequence, then a prompt for the
-host you're investigating.  After that, type any objective or one of
-the built-in commands.
-
-### Commands
-
-| Command  | What it does |
-|----------|--------------|
-| `workflow` | Open the workflow menu (23 pre-built engagement templates) |
-| `target`   | Set or update the host under investigation |
-| `findings` | Show every extracted finding (verified + unverified) |
-| `tree`     | Render the Defense Task Tree |
-| `graph`    | Show the threat graph state + pivot suggestions |
-| `scope`    | Show / toggle engagement scope (RoE) |
-| `mitre`    | Show MITRE ATT&CK techniques surfaced this session |
-| `tools`    | Tool availability + auto-install missing |
-| `model`    | Show provider chain status |
-| `agent`    | List all specialist agents |
-| `dashboard` | Concise session status panel |
-| `save`     | Save conversation to file |
-| `report`   | Generate the engagement report now |
-| `clear`    | Clear AI memory (DTT preserved) |
-| `reset`    | Reset everything (DTT + findings + history + sudo cache) |
-| `help`     | Show the help menu |
-| `exit` / `q` | End session and generate report |
-
-Or just type any objective in plain English — Ares routes to the
-right specialist.
-
-### Output format the AI uses
-
-```
-[THOUGHT]<reasoning>[/THOUGHT]
-[TOOL]<tool_name>[/TOOL][ARGS]<json>[/ARGS]    # or [CMD]<shell>[/CMD]
-[CONF]green|yellow|red[/CONF]
-[VERIFY]<verify_command>[/VERIFY]              # optional
-[HANDOFF]<other_agent>[/HANDOFF]               # optional
-[NEED]ptt|history|findings|graph|kb N[/NEED]   # optional, re-fetch
+```bash
+ares
 ```
 
----
+That's it. No flags, no subcommands, no config file. Ares boots,
+runs 18 checks in parallel, and prints a graded report.
 
-## Files
+### Example output
 
 ```
-ares.py                    # the whole agent, single file
-~/.ares/scope.json         # engagement scope / RoE
-~/.ares/logs/session_*.txt # per-session command + output log
-~/.ares/logs/report_*.md   # markdown report at end of session
-/tmp/ares_session.lock     # boot-check TTL marker (6h)
+╔══════════════════════════════════════════════════════════════════════╗
+║  ARES v5.0  ·  SYSTEM SECURITY AUDIT REPORT                          ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+    SECURITY GRADE: C  (score: 14)
+
+  Host:       velvet-tunder
+  Kernel:     6.6.58-sdm845-nh
+  Time:       5s
+  Checks:     18 run, 5 produced findings
+
+   1 high    2 medium    2 info
+
+  ── ⚠ HIGH (1) ──
+
+    FW-006        No firewall detected
+       what:   ufw / iptables / nft all report no active rules
+       fix:    sudo apt install ufw && sudo ufw default deny incoming
+       fix:    && sudo ufw allow ssh && sudo ufw enable
+
+  ── ● MEDIUM (2) ──
+
+    MAC-005       No MAC framework active
+       what:   no apparmor / selinux mandatory access control detected
+       fix:    Kali ships with apparmor — check it's enabled.
+
+    PATCH-002     Automatic security updates not configured
+       what:   unattended-upgrades not installed
+       fix:    sudo apt install unattended-upgrades
+
+  ── Checks that reported nothing ──
+
+    ✓  SSH           SSH server config
+    ✓  NET           Listening ports
+    ✓  PERM          Home dir permissions
+    ✓  AUTH-B        Failed SSH logins
+    ...
+
+  Read-only audit.  No changes were made to your system.
 ```
 
 ---
 
-## Safety
+## Configuration
 
-Ares **refuses**:
+All controlled by constants at the top of `ares.py`:
 
-- `apt upgrade` / `apt full-upgrade` / `apt dist-upgrade` and any
-  variants (Phosh + UI packages stay stable on a NetHunter phone).
-- Destructive commands (`rm -rf /`, `dd if=`, `mkfs`, fork bombs,
-  `shutdown`, `chmod -R 777 /`, `chown -R … /`).
-- Interactive shells that would hijack the terminal — vim, nano, less,
-  top, htop, mysql REPL, ssh interactive, telnet, wireshark GUI, and
-  loop wrappers like `tail -f`, `journalctl -f`, `watch`.  Each gets
-  a non-interactive replacement hint.
-- Out-of-scope hosts when scope enforcement is enabled.
+| Constant | Default | What it does |
+|----------|---------|--------------|
+| `TOTAL_TIMEOUT_SEC` | `120` | hard wall-clock cap |
+| `PER_CHECK_TIMEOUT` | `15` | one check's subprocess timeout |
+| `PARALLEL_CHECKS` | `6` | concurrent check threads |
 
-Ares **double-confirms** containment-style actions:
-
-- Process termination: `kill -9`, `killall`, `pkill`.
-- Firewall mutation: `iptables -F`, `iptables -X`, `nft flush`,
-  `nft delete`, `ufw disable`, `ufw reset`, `fail2ban-client unban`,
-  `fail2ban-client stop`.
-- Service control: `systemctl stop|disable|mask|kill`,
-  `service NAME stop`.
-- Account lockdown: `usermod -L`, `passwd -l`, `userdel`,
-  `usermod -s /sbin/nologin`.
-- File quarantine: `chmod +s`, `chattr +i`, write to `/etc/...`.
-- Audit/IDS mutation: `auditctl -D`, `suricatasc`,
-  `suricata-update --no-sources`.
-
-Every other command goes through the `y/n/q` gate before execution.
-Sudo is opt-in, prompted once per session via `getpass`, cached only in
-RAM, and fed to commands via `sudo -S` from stdin.
-
-**Ares never disables logging or audit during an active incident.**
-This is enforced by the IR Responder agent's extra-rules and the
-double-confirm gate.
+Edit them in-place if you need longer timeouts (slow disks, big
+SUID scans) or want more parallelism.
 
 ---
 
-## Pairing with Athena
+## Why a rewrite?
 
-Ares and Athena are designed to run side-by-side on the same host.
+The old Ares v1.0 was 6,725 lines. It had:
+- A 50-turn AI agent loop that proposed shell commands
+- `subprocess.run(..., shell=True)` execution of those commands
+- `install_if_missing()` running `sudo apt install -y <toolname>`
+  without confirmation
+- A multi-specialist routing system with 11 agents
+- DESTRUCTIVE_COMMANDS and DOUBLE_CONFIRM lists that depended on
+  the AI's restraint to stay safe
 
-- **Same Groq key.** No new account needed.
-- **Separate state directories.** `~/.ares/` and `~/.athena/` don't
-  share anything — different scope files, different logs, different
-  reports.
-- **Separate boot locks.** `/tmp/ares_session.lock` vs
-  `/tmp/athena_session.lock`.
-- **Same MITRE ATT&CK technique IDs**, viewed from opposite directions.
-  Athena fires them when running `nmap` or `hashcat`.  Ares fires them
-  when its tooling surfaces evidence of the same technique.
-- **Same UI conventions.** Same boxed turn output, same status bar,
-  same `y/n/q` gate, same `[TOOL]/[ARGS]/[CMD]` format.
+It worked, but the safety model was "trust the AI". That's fragile.
 
-A typical paired engagement:
+v5.0 has zero AI-driven commands. The 18 checks are pure Python
+calling specific read-only system commands via arg-lists. The AI
+is only used **once at the end** to write a short summary paragraph
+from the verified findings. If Groq is down, that paragraph is
+skipped and the report still works.
 
-1. Athena runs against a target.  Records what worked.
-2. Ares runs against the same target's defender posture.
-3. The diff is your hardening backlog.
+**86% code reduction.** Same defensive value. Zero risk of the AI
+deciding to "helpfully" run something it shouldn't.
+
+---
+
+## Tested on
+
+- Kali Linux Rolling (aarch64) on OnePlus 6, NetHunter,
+  kernel `6.6.58-sdm845-nh`, Phosh UI
+- Linux Mint Cinnamon (x86_64), Dell Latitude E5540
+- ThinkPad X395 dedicated Kali SSD
+- Ubuntu 24.04 LTS container
+
+---
+
+## API keys
+
+- **Groq** — `GROQ_API_KEY`, free tier. Used **only** for the
+  optional AI summary paragraph at the end. Ares works fine
+  without it.
+
+That's the only optional integration. Everything else is local.
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for the full text plus a use-only-on-systems-you-own
-disclaimer. Personal project by The Priest. Use at your own risk.
+MIT — see `LICENSE`.
+
+---
+
+## Acknowledgements
+
+Inspired by Lynis, CIS benchmarks, and Phil Hagen's SOF-ELK
+defaults. None of those projects endorse this tool. The
+specific check selection, parallelism, scoring model, and
+reporting layer are mine.

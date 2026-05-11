@@ -1,2 +1,7 @@
-groq
-networkx
+# Ares v5.0 runtime deps — minimal by design.
+# Every check uses the Python 3.10+ standard library and shell-outs
+# to read-only system binaries (ss, iptables, ufw, journalctl, etc).
+
+# Optional but recommended: AI summary paragraph at end of report.
+# Comment this line out if you don't have a Groq API key.
+groq>=0.4.0

@@ -1,164 +1,110 @@
 #!/usr/bin/env bash
-# Ares installer — sets up Python deps, /usr/local/bin shortcut,
-# ~/.ares directory, and (optionally) GROQ_API_KEY in your shell rc.
+# Ares v5.0 installer
 #
-# Mirrors the Athena installer: same layout, same shell-detection
-# pattern, same fallback chain.  GROQ_API_KEY is shared between Athena
-# and Ares — if you already have it set for Athena, Ares picks it up.
+# This installer is deliberately minimal — it matches Ares' read-only
+# philosophy.  It does NOT:
+#   • install any system packages
+#   • require sudo
+#   • modify any system configuration
+#   • touch ~/.bashrc unless you ask
+#
+# It only:
+#   • verifies Python 3.10+ is available
+#   • installs the optional 'groq' python package for AI summaries
+#   • makes ares.py executable
+#   • symlinks ~/.local/bin/ares → ares.py
 
-set -euo pipefail
+set -e
 
-ARES_DIR="$HOME/.ares"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPT="$SCRIPT_DIR/ares.py"
-TARGET="/usr/local/bin/ares"
-
-c_blue()   { printf '\033[34m%s\033[0m\n' "$*"; }
-c_green()  { printf '\033[32m%s\033[0m\n' "$*"; }
-c_yellow() { printf '\033[33m%s\033[0m\n' "$*"; }
-c_red()    { printf '\033[31m%s\033[0m\n' "$*"; }
-
-c_blue "==> Ares installer (v1.0)"
-echo
-
-# ── Detect rc files to update ─────────────────────────────────────
-LOGIN_SHELL_NAME="$(basename "${SHELL:-/bin/bash}")"
-PRIMARY_RC="$HOME/.bashrc"
-case "$LOGIN_SHELL_NAME" in
-    zsh)  PRIMARY_RC="$HOME/.zshrc" ;;
-    bash) PRIMARY_RC="$HOME/.bashrc" ;;
-    *)    PRIMARY_RC="$HOME/.profile" ;;
-esac
-
-RC_FILES=()
-for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
-    [[ -f "$rc" ]] && RC_FILES+=("$rc")
-done
-if [[ ! -f "$PRIMARY_RC" ]]; then
-    touch "$PRIMARY_RC"
-    RC_FILES+=("$PRIMARY_RC")
+if [ -t 1 ]; then
+  RED=$'\033[31m'; GRN=$'\033[32m'; YEL=$'\033[33m'
+  CYN=$'\033[36m'; DIM=$'\033[90m'; RST=$'\033[0m'; BLD=$'\033[1m'
+else
+  RED=""; GRN=""; YEL=""; CYN=""; DIM=""; RST=""; BLD=""
 fi
 
-c_green "[ok] login shell: $LOGIN_SHELL_NAME"
-c_green "[ok] will update: ${RC_FILES[*]}"
+say()  { printf "%s\n" "${CYN}[ares]${RST} $*"; }
+ok()   { printf "%s\n" "${GRN}  ✓${RST} $*"; }
+warn() { printf "%s\n" "${YEL}  ⚠${RST} $*"; }
+err()  { printf "%s\n" "${RED}  ✕${RST} $*"; }
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ARES_PY="$SCRIPT_DIR/ares.py"
+
+if [ ! -f "$ARES_PY" ]; then
+  err "ares.py not found in $SCRIPT_DIR"
+  exit 1
+fi
+
+say "Ares v5.0 installer (read-only audit tool)"
+say "working from: $SCRIPT_DIR"
+echo
 
 # ── Python check ──────────────────────────────────────────────────
 if ! command -v python3 >/dev/null 2>&1; then
-    c_red "Python 3 not found. Install python3 (3.10+) and re-run."
-    exit 1
+  err "python3 not installed — install python3 (>= 3.10) first"
+  exit 1
 fi
 
-PY_VER=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-PY_OK=$(python3 -c 'import sys; print(1 if sys.version_info >= (3,10) else 0)')
-if [[ "$PY_OK" != "1" ]]; then
-    c_red "Python 3.10+ required, found $PY_VER"
-    exit 1
+PY_VER=$(python3 -c 'import sys; print("{}.{}".format(*sys.version_info[:2]))')
+PY_MAJOR=$(echo "$PY_VER" | cut -d. -f1)
+PY_MINOR=$(echo "$PY_VER" | cut -d. -f2)
+if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]; }; then
+  err "python $PY_VER detected — Ares needs Python 3.10+"
+  exit 1
 fi
-c_green "[ok] Python $PY_VER"
+ok "python3 $PY_VER"
 
-# ── Ares script presence ──────────────────────────────────────────
-if [[ ! -f "$SCRIPT" ]]; then
-    c_red "ares.py not found at $SCRIPT"
-    exit 1
-fi
-chmod +x "$SCRIPT"
-c_green "[ok] ares.py present"
-
-# ── Python dependencies ───────────────────────────────────────────
-c_blue "==> Installing Python dependencies (groq, networkx)"
-PIP_FLAGS=""
-# Kali / Debian Bookworm+ ships PEP 668-protected Python — need this
-if pip3 install --help 2>&1 | grep -q -- "--break-system-packages"; then
-    PIP_FLAGS="--break-system-packages"
-fi
-if [[ -f "$SCRIPT_DIR/requirements.txt" ]]; then
-    REQ_SRC="-r $SCRIPT_DIR/requirements.txt"
+# ── Python deps (only the optional groq package) ──────────────────
+say "installing python deps (optional groq for AI summary)..."
+if [ -f "$SCRIPT_DIR/requirements.txt" ]; then
+  if pip install -r "$SCRIPT_DIR/requirements.txt" >/dev/null 2>&1; then
+    ok "requirements.txt installed (pip)"
+  elif pip install -r "$SCRIPT_DIR/requirements.txt" --break-system-packages >/dev/null 2>&1; then
+    ok "requirements.txt installed (--break-system-packages)"
+  elif pip install -r "$SCRIPT_DIR/requirements.txt" --user >/dev/null 2>&1; then
+    ok "requirements.txt installed (--user)"
+  else
+    warn "pip failed — Ares will still work, just without the AI summary"
+    warn "  manual: pip install groq --break-system-packages"
+  fi
 else
-    REQ_SRC="groq networkx"
-fi
-if ! pip3 install -q $PIP_FLAGS $REQ_SRC; then
-    c_yellow "[!] pip install failed — trying with --user"
-    pip3 install -q --user $PIP_FLAGS $REQ_SRC
-fi
-c_green "[ok] dependencies installed"
-
-# ── Ares directory ────────────────────────────────────────────────
-mkdir -p "$ARES_DIR/logs"
-c_green "[ok] $ARES_DIR/"
-
-# ── Symlink to /usr/local/bin (or fall back to alias) ─────────────
-LINK_OK=0
-if sudo -n true 2>/dev/null || [[ -w "/usr/local/bin" ]]; then
-    if [[ -L "$TARGET" || -e "$TARGET" ]]; then
-        sudo rm -f "$TARGET" 2>/dev/null || rm -f "$TARGET"
-    fi
-    if [[ -w "/usr/local/bin" ]]; then
-        ln -s "$SCRIPT" "$TARGET"
-    else
-        sudo ln -s "$SCRIPT" "$TARGET"
-    fi
-    c_green "[ok] $TARGET → $SCRIPT"
-    LINK_OK=1
-else
-    c_yellow "==> sudo not available — adding 'ares' alias to your rc files"
-    for rc in "${RC_FILES[@]}"; do
-        if ! grep -q "^alias ares=" "$rc" 2>/dev/null; then
-            echo "alias ares='python3 $SCRIPT'" >> "$rc"
-            c_green "[ok] alias added to $rc"
-        else
-            c_green "[ok] alias already present in $rc"
-        fi
-    done
+  warn "requirements.txt not found — skipping python deps"
 fi
 
-# ── GROQ_API_KEY (shared with Athena if you have it) ──────────────
-HAS_KEY_IN_RC=0
-for rc in "${RC_FILES[@]}"; do
-    if grep -q "GROQ_API_KEY" "$rc" 2>/dev/null; then
-        HAS_KEY_IN_RC=1
-        break
-    fi
-done
+# ── Make ares.py executable ───────────────────────────────────────
+chmod +x "$ARES_PY"
+ok "ares.py marked executable"
 
-if [[ -z "${GROQ_API_KEY:-}" && "$HAS_KEY_IN_RC" == "0" ]]; then
-    echo
-    c_yellow "==> No GROQ_API_KEY found in your environment or rc files"
-    echo "    Get a free key at: https://console.groq.com (no credit card)"
-    echo "    The same key works for both Athena and Ares."
-    read -r -p "    Paste your Groq API key (or press Enter to skip): " key
-    if [[ -n "$key" ]]; then
-        for rc in "${RC_FILES[@]}"; do
-            echo "export GROQ_API_KEY=$key" >> "$rc"
-            c_green "[ok] GROQ_API_KEY written to $rc"
-        done
-        c_yellow "    Reload your shell:  source $PRIMARY_RC"
-    else
-        c_yellow "[!] Skipped. Set GROQ_API_KEY before running ares."
-    fi
-elif [[ "$HAS_KEY_IN_RC" == "1" ]]; then
-    c_green "[ok] GROQ_API_KEY already configured in your shell — Ares will use it."
-fi
+# ── Symlink as `ares` ─────────────────────────────────────────────
+BIN_DIR="$HOME/.local/bin"
+mkdir -p "$BIN_DIR"
+LINK="$BIN_DIR/ares"
+ln -sf "$ARES_PY" "$LINK"
+ok "symlinked $LINK → $ARES_PY"
 
-# ── Optional: scope.example.json → ~/.ares/ ──────────────────────
-if [[ ! -f "$ARES_DIR/scope.json" && -f "$SCRIPT_DIR/scope.example.json" ]]; then
-    cp "$SCRIPT_DIR/scope.example.json" "$ARES_DIR/scope.json"
-    c_green "[ok] example scope.json copied to $ARES_DIR/"
-fi
+case ":$PATH:" in
+  *":$BIN_DIR:"*) ok "$BIN_DIR is on PATH" ;;
+  *)
+    warn "$BIN_DIR is NOT on PATH — add this to your shell rc:"
+    warn "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+    ;;
+esac
 
-# ── Friendly callout if Athena is also installed ─────────────────
-if [[ -d "$HOME/.athena" ]]; then
-    echo
-    c_blue "==> Athena detected at $HOME/.athena"
-    echo "    Ares and Athena are designed to run side-by-side."
-    echo "    Same Groq key.  Separate logs/scope/reports."
-    echo "    Athena finds the path in.  Ares verifies you've closed it."
-fi
-
+# ── Groq API key check ────────────────────────────────────────────
 echo
-c_blue "==> Install complete"
-if [[ "$LINK_OK" == "1" ]]; then
-    echo "    Run:  ares"
+if [ -n "${GROQ_API_KEY:-}" ]; then
+  ok "GROQ_API_KEY is set — AI summary paragraph will work"
 else
-    echo "    Run:  source $PRIMARY_RC && ares"
+  warn "GROQ_API_KEY not set — AI summary will be skipped (Ares still works)"
+  warn "  Get a free key at: https://console.groq.com"
+  warn "  Then:  export GROQ_API_KEY=gsk_..."
 fi
+
+# ── Reminder about read-only nature ───────────────────────────────
 echo
+say "${BLD}done.${RST}  run:  ${GRN}ares${RST}"
+echo
+echo "${DIM}  Ares is read-only.  It will NOT modify your system.${RST}"
+echo "${DIM}  Some checks need root to see everything.  If you want a${RST}"
+echo "${DIM}  complete audit, run:  ${GRN}sudo ares${RST}${DIM}  — but it is NOT required.${RST}"
